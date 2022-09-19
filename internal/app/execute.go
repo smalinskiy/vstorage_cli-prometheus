@@ -20,7 +20,8 @@ type commands struct {
 
 type Stats struct {
 	Name                 string `xml:"cluster_name"`
-	Status               string `xml:"status"`
+	StatusString         string `xml:"status"`
+	Status               int
 	License_Status       int    `xml:"license>status"`
 	Licensed_Capacity    string `xml:"license>capacity"`
 	SpaceAllocatable     int    `xml:"space>allocatable"`
@@ -44,9 +45,16 @@ var (
 )
 
 var (
-	sample_value = promauto.NewGauge(prometheus.GaugeOpts{
+	total_s3_volume = promauto.NewGauge(prometheus.GaugeOpts{
 		Name: "total_s3_volume",
 		Help: "The total volume of S3 Storage",
+	})
+)
+
+var (
+	status = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "cluster_health",
+		Help: "cluster health",
 	})
 )
 
@@ -76,15 +84,24 @@ func collectstats() error {
 		arg3: "--xml",
 	}
 	cmd := exec.Command(x.app, x.arg0, x.arg1, x.arg2, x.arg3)
+
 	stdout, _ := cmd.Output()
+
 	var s Stats
 	if err := xml.Unmarshal(stdout, &s); err != nil {
 		return err
 	}
+
+	if s.StatusString == "healthy" {
+		s.Status = 1
+	}
+
 	fmt.Println(s)
+
 	//opsProcessed.Inc()
-	sample_value.Set(float64(s.SpaceTotal))
+	total_s3_volume.Set(float64(s.SpaceTotal))
 	license_status.Set(float64(s.License_Status))
+	status.Set(float64(s.Status))
 	return nil
 }
 
